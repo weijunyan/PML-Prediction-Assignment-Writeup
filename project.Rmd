@@ -1,0 +1,86 @@
+---
+title: "PML-Project"
+author: "Wei Junyan"
+date: "Friday, September 19, 2014"
+output: html_document
+---
+
+This is an R Markdown document for the project of Practical Machine Learning.
+
+```{r}
+## Our data is cited from http://groupware.les.inf.puc-rio.br/har.
+
+################################################ 
+###  read data
+setwd("C:/Users/WEI Junyan/Downloads/data science/practival machine Learning/project")
+pml_train<-read.csv("pml-training.csv",header=T)
+pml_test<-read.csv("pml-testing.csv",header=T)
+dim(pml_train) # 19622*160
+dim(pml_test) # 20*160,submission part is to submit #the predict result of the test set
+
+################################################# 
+#### standardizing and Imputing data(only on non-favtor predictors)
+library(lattice)
+library(ggplot2)
+library(caret)
+
+num<-c()
+for (i in 1:ncol(pml_train)){
+if (class(pml_train[,i])!="factor")
+num=cbind(num,i)
+}
+nnm<-as.numeric(num)
+preObj<- preProcess(pml_train[,nnm],method="knnImpute")
+pmltrain<-predict(preObj,pml_train[,nnm])
+pmltest<-predict(preObj,pml_test[,nnm])
+####################################################
+## Reduce the dimensions of predictors using PCA
+M<-abs(cor(pmltrain))
+diag(M)<-0
+X<-which(M>0.8,arr.ind=T)
+## This tells us there are many predictors are strong related with others.
+prePca <- preProcess(pmltrain,method="pca",thresh=0.9)
+trainPC <- predict(prePca,pmltrain)
+testPC<-predict(prePca,pmltest)
+
+## Combine the remain data with the standaradizing data
+training <- data.frame(trainPC,pml_train$classe)
+#    All categoical predictors don't have values for each case,except the classe.
+#    Thus I will noly use the predictors which are Int and Num, that is the data training.
+```
+############################################################
+````{r}
+#   I will use three mothods to build the models. And I will use 10-fold cross validation in the set of trainControl function.
+library(mboost)
+library(rpart)
+library(cluster)
+library(maptree)
+modeltree <- train(pml_train.classe~., data=training,
+                  "rpart",
+                  tuneLength = 9,
+                  trControl = trainControl(
+                    method = "cv"))
+confusionMatrix(pml_train$classe,predict(modeltree,trainPC,type="raw"))
+#################################################################
+
+mlogitcv<-train(pml_train.classe~.,data=training,method = 'multinom',
+                trControl = trainControl(method = "cv"))
+confusionMatrix(pml_train$classe,predict(mlogitcv,trainPC,type="raw"))
+````
+#################################################################
+````{r}
+library(randomForest)
+
+trainrf<-train(pml_train.classe~.,data=training,
+                 trControl = trainControl(
+  method = "cv"),
+  method="rf")
+confusionMatrix(pml_train$classe,predict(trainrf,trainPC,type="raw"))
+
+trainrf
+pre<-predict(trainrf,testPC,type="raw")    
+source("C:\\Users\\WEI Junyan\\Downloads\\data science\\practival machine Learning\\project\\pml.R")
+pml_write_files(pre)
+#   This accuracy is more higher than the previous two ones, so I use this trainrf model to predict the test set. However, it wastes more time than 'multinom' method. 
+
+````
